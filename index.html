@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinite Painter Studio</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1a1a2e; }
+::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; background: #333355; border-radius: 2px; outline: none; width: 100%; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #6677ff; border-radius: 50%; cursor: pointer; border: 2px solid #8899ff; }
+select { background: #2a2a4a; color: #ddd; border: 1px solid #444466; border-radius: 3px; padding: 3px 6px; font-size: 11px; outline: none; }
+.panel { background: #222244; border: 1px solid #333366; border-radius: 4px; }
+.btn { background: #2a2a4a; border: 1px solid #3a3a5a; border-radius: 3px; color: #bbb; cursor: pointer; transition: all 0.12s; display: flex; align-items: center; justify-content: center; }
+.btn:hover { background: #3a3a5a; color: #fff; }
+.btn.active { background: #4455cc; border-color: #5566dd; color: #fff; }
+.layer-item { border-bottom: 1px solid #2a2a4a; cursor: pointer; }
+.layer-item:hover { background: #2a2a4a; }
+.layer-item.active { background: #333366; border-left: 3px solid #6677ff; }
+.menu-bar-item { padding: 4px 10px; cursor: pointer; color: #bbb; font-size: 12px; border-radius: 2px; }
+.menu-bar-item:hover { background: #3a3a5a; color: #fff; }
+.dropdown-menu { position: absolute; top: 100%; left: 0; background: #252550; border: 1px solid #444466; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); min-width: 200px; z-index: 1000; padding: 4px 0; }
+.dropdown-item { padding: 6px 20px; cursor: pointer; color: #ccc; font-size: 12px; display: flex; justify-content: space-between; }
+.dropdown-item:hover { background: #4455cc; color: #fff; }
+.dropdown-separator { height: 1px; background: #333366; margin: 4px 0; }
+@keyframes march { to { stroke-dashoffset: -16; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo, useReducer } = React;
+
+// ============ BRUSH PRESETS ============
+const BRUSH_CATEGORIES = {
+  'Basic': [
+    { name: 'Hard Round', type: 'round', size: 10, opacity: 100, hardness: 100, flow: 100, spacing: 5 },
+    { name: 'Soft Round', type: 'round', size: 20, opacity: 80, hardness: 30, flow: 80, spacing: 5 },
+    { name: 'Soft Round Large', type: 'round', size: 60, opacity: 60, hardness: 20, flow: 70, spacing: 4 },
+    { name: 'Hard Round Small', type: 'round', size: 3, opacity: 100, hardness: 100, flow: 100, spacing: 3 },
+    { name: 'Hard Round Pressure', type: 'round', size: 15, opacity: 100, hardness: 90, flow: 100, spacing: 4 },
+    { name: 'Soft Glow', type: 'round', size: 40, opacity: 40, hardness: 5, flow: 50, spacing: 3 },
+    { name: 'Detail Round', type: 'round', size: 2, opacity: 100, hardness: 100, flow: 100, spacing: 2 },
+    { name: 'Medium Soft', type: 'round', size: 30, opacity: 70, hardness: 40, flow: 80, spacing: 5 },
+    { name: 'Blending Round', type: 'round', size: 25, opacity: 30, hardness: 20, flow: 40, spacing: 3 },
+    { name: 'Flat Basic', type: 'round', size: 18, opacity: 90, hardness: 70, flow: 90, spacing: 5 },
+    { name: 'Crisp Round', type: 'round', size: 8, opacity: 100, hardness: 95, flow: 100, spacing: 4 },
+    { name: 'Feather Round', type: 'round', size: 35, opacity: 50, hardness: 10, flow: 60, spacing: 4 },
+  ],
+  'Pencil': [
+    { name: 'HB Pencil', type: 'pencil', size: 2, opacity: 60, hardness: 90, flow: 40, spacing: 2 },
+    { name: '2B Pencil', type: 'pencil', size: 3, opacity: 70, hardness: 85, flow: 50, spacing: 2 },
+    { name: '4B Pencil', type: 'pencil', size: 4, opacity: 80, hardness: 75, flow: 60, spacing: 2 },
+    { name: '6B Pencil', type: 'pencil', size: 5, opacity: 85, hardness: 70, flow: 65, spacing: 3 },
+    { name: 'Mechanical 0.5', type: 'pencil', size: 1, opacity: 90, hardness: 100, flow: 80, spacing: 1 },
+    { name: 'Mechanical 0.7', type: 'pencil', size: 2, opacity: 90, hardness: 100, flow: 80, spacing: 1 },
+    { name: 'Colored Pencil', type: 'pencil', size: 3, opacity: 50, hardness: 80, flow: 35, spacing: 2 },
+    { name: 'Sketch Pencil', type: 'pencil', size: 4, opacity: 55, hardness: 82, flow: 45, spacing: 2 },
+    { name: 'Rough Pencil', type: 'pencil', size: 5, opacity: 65, hardness: 60, flow: 55, spacing: 3 },
+    { name: 'Soft Graphite', type: 'pencil', size: 6, opacity: 50, hardness: 50, flow: 40, spacing: 3 },
+    { name: 'Hard Graphite', type: 'pencil', size: 2, opacity: 80, hardness: 95, flow: 70, spacing: 2 },
+    { name: 'Pastel Pencil', type: 'pencil', size: 8, opacity: 45, hardness: 40, flow: 35, spacing: 4 },
+  ],
+  'Ink': [
+    { name: 'Fine Ink', type: 'ink', size: 2, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+    { name: 'Medium Ink', type: 'ink', size: 4, opacity: 100, hardness: 100, flow: 100, spacing: 2 },
+    { name: 'Broad Ink', type: 'ink', size: 8, opacity: 100, hardness: 95, flow: 100, spacing: 2 },
+    { name: 'Calligraphy', type: 'ink', size: 6, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+    { name: 'Brush Pen', type: 'ink', size: 5, opacity: 100, hardness: 90, flow: 100, spacing: 2 },
+    { name: 'Technical Pen', type: 'ink', size: 1, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+    { name: 'Marker Pen', type: 'ink', size: 10, opacity: 90, hardness: 85, flow: 95, spacing: 3 },
+    { name: 'Nib Fine', type: 'ink', size: 2, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+    { name: 'Nib Broad', type: 'ink', size: 7, opacity: 100, hardness: 100, flow: 100, spacing: 2 },
+    { name: 'Felt Tip', type: 'ink', size: 6, opacity: 95, hardness: 80, flow: 90, spacing: 2 },
+    { name: 'Sumi Ink', type: 'ink', size: 12, opacity: 85, hardness: 60, flow: 80, spacing: 3 },
+    { name: 'Dip Pen', type: 'ink', size: 3, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+  ],
+  'Airbrush': [
+    { name: 'Soft Airbrush', type: 'airbrush', size: 40, opacity: 15, hardness: 5, flow: 20, spacing: 3 },
+    { name: 'Medium Airbrush', type: 'airbrush', size: 30, opacity: 25, hardness: 10, flow: 30, spacing: 3 },
+    { name: 'Hard Airbrush', type: 'airbrush', size: 20, opacity: 35, hardness: 20, flow: 40, spacing: 4 },
+    { name: 'Fine Spray', type: 'airbrush', size: 15, opacity: 20, hardness: 8, flow: 25, spacing: 2 },
+    { name: 'Wide Spray', type: 'airbrush', size: 80, opacity: 10, hardness: 3, flow: 15, spacing: 4 },
+    { name: 'Spatter', type: 'airbrush', size: 50, opacity: 30, hardness: 15, flow: 35, spacing: 8 },
+    { name: 'Mist', type: 'airbrush', size: 60, opacity: 8, hardness: 2, flow: 10, spacing: 3 },
+    { name: 'Gradient Spray', type: 'airbrush', size: 45, opacity: 12, hardness: 4, flow: 18, spacing: 3 },
+    { name: 'Dot Spray', type: 'airbrush', size: 25, opacity: 40, hardness: 25, flow: 45, spacing: 10 },
+    { name: 'Cloud Spray', type: 'airbrush', size: 70, opacity: 6, hardness: 2, flow: 8, spacing: 4 },
+  ],
+  'Watercolor': [
+    { name: 'Wet Wash', type: 'watercolor', size: 40, opacity: 25, hardness: 5, flow: 30, spacing: 3 },
+    { name: 'Dry Brush WC', type: 'watercolor', size: 30, opacity: 40, hardness: 15, flow: 45, spacing: 4 },
+    { name: 'Glazing', type: 'watercolor', size: 35, opacity: 15, hardness: 3, flow: 20, spacing: 3 },
+    { name: 'Splatter WC', type: 'watercolor', size: 20, opacity: 35, hardness: 10, flow: 40, spacing: 6 },
+    { name: 'Bleed', type: 'watercolor', size: 50, opacity: 20, hardness: 2, flow: 25, spacing: 3 },
+    { name: 'Flat Wash', type: 'watercolor', size: 60, opacity: 18, hardness: 4, flow: 22, spacing: 3 },
+    { name: 'Round WC', type: 'watercolor', size: 25, opacity: 30, hardness: 8, flow: 35, spacing: 3 },
+    { name: 'Detail WC', type: 'watercolor', size: 8, opacity: 45, hardness: 20, flow: 50, spacing: 2 },
+    { name: 'Bloom', type: 'watercolor', size: 55, opacity: 12, hardness: 2, flow: 15, spacing: 4 },
+    { name: 'Wet on Wet', type: 'watercolor', size: 45, opacity: 20, hardness: 3, flow: 25, spacing: 3 },
+  ],
+  'Marker': [
+    { name: 'Chisel Marker', type: 'marker', size: 15, opacity: 70, hardness: 60, flow: 80, spacing: 3 },
+    { name: 'Bullet Marker', type: 'marker', size: 8, opacity: 75, hardness: 70, flow: 85, spacing: 3 },
+    { name: 'Broad Marker', type: 'marker', size: 25, opacity: 65, hardness: 50, flow: 75, spacing: 4 },
+    { name: 'Fine Marker', type: 'marker', size: 3, opacity: 80, hardness: 80, flow: 90, spacing: 2 },
+    { name: 'Highlighter', type: 'marker', size: 20, opacity: 40, hardness: 40, flow: 50, spacing: 3 },
+    { name: 'Alcohol Marker', type: 'marker', size: 18, opacity: 60, hardness: 45, flow: 70, spacing: 3 },
+    { name: 'Sketch Marker', type: 'marker', size: 12, opacity: 55, hardness: 55, flow: 65, spacing: 3 },
+    { name: 'Copic Style', type: 'marker', size: 14, opacity: 50, hardness: 35, flow: 60, spacing: 3 },
+    { name: 'Paint Marker', type: 'marker', size: 10, opacity: 85, hardness: 75, flow: 95, spacing: 3 },
+    { name: 'Dry Marker', type: 'marker', size: 16, opacity: 45, hardness: 65, flow: 55, spacing: 4 },
+  ],
+  'Charcoal': [
+    { name: 'Vine Charcoal', type: 'charcoal', size: 8, opacity: 50, hardness: 30, flow: 55, spacing: 3 },
+    { name: 'Compressed', type: 'charcoal', size: 6, opacity: 70, hardness: 50, flow: 75, spacing: 3 },
+    { name: 'Willow Stick', type: 'charcoal', size: 12, opacity: 40, hardness: 20, flow: 45, spacing: 4 },
+    { name: 'Charcoal Pencil', type: 'charcoal', size: 4, opacity: 60, hardness: 60, flow: 65, spacing: 2 },
+    { name: 'Broad Charcoal', type: 'charcoal', size: 20, opacity: 35, hardness: 15, flow: 40, spacing: 5 },
+    { name: 'Conte Crayon', type: 'charcoal', size: 10, opacity: 55, hardness: 40, flow: 60, spacing: 3 },
+    { name: 'Soft Pastel', type: 'charcoal', size: 15, opacity: 45, hardness: 25, flow: 50, spacing: 4 },
+    { name: 'Hard Pastel', type: 'charcoal', size: 7, opacity: 65, hardness: 55, flow: 70, spacing: 3 },
+    { name: 'Oil Pastel', type: 'charcoal', size: 14, opacity: 60, hardness: 35, flow: 65, spacing: 4 },
+    { name: 'Chalk', type: 'charcoal', size: 10, opacity: 50, hardness: 30, flow: 55, spacing: 4 },
+  ],
+  'Special': [
+    { name: 'Smudge Light', type: 'round', size: 20, opacity: 30, hardness: 20, flow: 35, spacing: 3 },
+    { name: 'Smudge Heavy', type: 'round', size: 30, opacity: 50, hardness: 30, flow: 55, spacing: 4 },
+    { name: 'Blur Soft', type: 'round', size: 25, opacity: 40, hardness: 10, flow: 45, spacing: 3 },
+    { name: 'Texture Brush', type: 'charcoal', size: 30, opacity: 45, hardness: 20, flow: 50, spacing: 6 },
+    { name: 'Stipple', type: 'airbrush', size: 15, opacity: 60, hardness: 30, flow: 65, spacing: 12 },
+    { name: 'Splatter', type: 'airbrush', size: 40, opacity: 50, hardness: 20, flow: 55, spacing: 15 },
+    { name: 'Noise', type: 'charcoal', size: 20, opacity: 35, hardness: 10, flow: 40, spacing: 8 },
+    { name: 'Stars', type: 'airbrush', size: 3, opacity: 90, hardness: 95, flow: 95, spacing: 20 },
+    { name: 'Grass', type: 'pencil', size: 2, opacity: 70, hardness: 90, flow: 75, spacing: 4 },
+    { name: 'Fur', type: 'pencil', size: 1, opacity: 60, hardness: 85, flow: 65, spacing: 3 },
+    { name: 'Leaves', type: 'watercolor', size: 15, opacity: 50, hardness: 15, flow: 55, spacing: 10 },
+    { name: 'Cloud', type: 'airbrush', size: 60, opacity: 10, hardness: 2, flow: 12, spacing: 5 },
+  ],
+  'Eraser': [
+    { name: 'Hard Eraser', type: 'round', size: 20, opacity: 100, hardness: 100, flow: 100, spacing: 4 },
+    { name: 'Soft Eraser', type: 'round', size: 30, opacity: 80, hardness: 20, flow: 80, spacing: 4 },
+    { name: 'Detail Eraser', type: 'round', size: 5, opacity: 100, hardness: 100, flow: 100, spacing: 2 },
+    { name: 'Kneaded Eraser', type: 'round', size: 25, opacity: 40, hardness: 10, flow: 45, spacing: 3 },
+    { name: 'Block Eraser', type: 'round', size: 40, opacity: 100, hardness: 90, flow: 100, spacing: 5 },
+    { name: 'Precision Eraser', type: 'round', size: 2, opacity: 100, hardness: 100, flow: 100, spacing: 1 },
+  ],
+};
+
+const BLEND_MODES = ['Normal','Multiply','Screen','Overlay','Soft Light','Hard Light','Color Dodge','Color Burn','Difference','Hue','Saturation','Color','Luminosity'];
+
+const TOOLS = [
+  { id: 'brush', name: 'Brush', shortcut: 'B', icon: 'M4 20L8 16L12 18L16 10L20 4M4 20L2 22' },
+  { id: 'pencil', name: 'Pencil', shortcut: 'N', icon: 'M3 21L5 14L18 1L23 6L10 19L3 21ZM14 5L19 10' },
+  { id: 'eraser', name: 'Eraser', shortcut: 'E', icon: 'M4 20H20M7 16L16 7L20 11L11 20H7V16Z' },
+  { id: 'eyedropper', name: 'Eyedropper', shortcut: 'I', icon: 'M3 21L7 17M7 17L17 7L20 4M7 17L4 20M17 7L20 10M14 4L20 10' },
+  { id: 'bucket', name: 'Paint Bucket', shortcut: 'G', icon: 'M5 16L12 9L19 16C19 16 17 20 12 20C7 20 5 16 5 16ZM12 9L16 5L20 9' },
+  { id: 'gradient', name: 'Gradient', shortcut: 'G', icon: 'M3 3H21V21H3V3ZM3 12H21M7 3V21M12 3V21M17 3V21' },
+  { id: 'move', name: 'Move', shortcut: 'V', icon: 'M12 2V22M2 12H22M12 2L8 6M12 2L16 6M12 22L8 18M12 22L16 18M2 12L6 8M2 12L6 16M22 12L18 8M22 12L18 16' },
+  { id: 'rectSelect', name: 'Rectangle Select', shortcut: 'M', icon: 'M3 3H21V21H3V3Z' },
+  { id: 'ellipseSelect', name: 'Ellipse Select', shortcut: 'M', icon: 'M12 5C16.4 5 20 8.1 20 12C20 15.9 16.4 19 12 19C7.6 19 4 15.9 4 12C4 8.1 7.6 5 12 5Z' },
+  { id: 'lasso', name: 'Lasso', shortcut: 'L', icon: 'M3 14C3 14 5 4 12 4C19 4 21 14 21 14C21 14 19 22 12 22C5 22 3 14 3 14Z' },
+  { id: 'smudge', name: 'Smudge', shortcut: 'R', icon: 'M5 19C5 19 8 15 12 12C16 9 19 5 19 5M3 21L6 18' },
+  { id: 'blur', name: 'Blur', shortcut: 'R', icon: 'M12 3C7 3 3 7 3 12C3 17 7 21 12 21C17 21 21 17 21 12C21 7 17 3 12 3ZM12 7C9.2 7 7 9.2 7 12' },
+];
+
+// ============ UTILITY FUNCTIONS ============
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return { r, g, b };
+}
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(x => Math.round(x).toString(16).padStart(2,'0')).join('');
+}
+function hsvToRgb(h, s, v) {
+  h = h / 360; s = s / 100; v = v / 100;
+  let r, g, b;
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+}
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h, s = max === 0 ? 0 : d / max, v = max;
+  if (max === min) { h = 0; }
+  else {
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h: Math.round(h * 360), s: Math.round(s * 100), v: Math.round(v * 100) };
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function dist(x1, y1, x2, y2) { return Math.sqrt((x2-x1)**2 + (y2-y1)**2); }
+function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+// Catmull-Rom spline interpolation for smooth strokes
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return {
+    x: 0.5 * ((2*p1.x) + (-p0.x+p2.x)*t + (2*p0.x-5*p1.x+4*p2.x-p3.x)*t2 + (-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+    y: 0.5 * ((2*p1.y) + (-p0.y+p2.y)*t + (2*p0.y-5*p1.y+4*p2.y-p3.y)*t2 + (-p0.y+3*p1.y-3*p2.y+p3.y)*t3),
+  };
+}
+
+// Blend mode compositing
+function blendColors(base, top, mode, opacity) {
+  const a = opacity / 255;
+  let r, g, b;
+  const br = base.r/255, bg = base.g/255, bb = base.b/255;
+  const tr = top.r/255, tg = top.g/255, tb = top.b/255;
+  switch(mode) {
+    case 'Multiply': r = br*tr; g = bg*tg; b = bb*tb; break;
+    case 'Screen': r = 1-(1-br)*(1-tr); g = 1-(1-bg)*(1-tg); b = 1-(1-bb)*(1-tb); break;
+    case 'Overlay': r = br<0.5?2*br*tr:1-2*(1-br)*(1-tr); g = bg<0.5?2*bg*tg:1-2*(1-bg)*(1-tg); b = bb<0.5?2*bb*tb:1-2*(1-bb)*(1-tb); break;
+    case 'Soft Light': r = tr<0.5?br-(1-2*tr)*br*(1-br):br+(2*tr-1)*(Math.sqrt(br)-br); g = tg<0.5?bg-(1-2*tg)*bg*(1-bg):bg+(2*tg-1)*(Math.sqrt(bg)-bg); b = tb<0.5?bb-(1-2*tb)*bb*(1-bb):bb+(2*tb-1)*(Math.sqrt(bb)-bb); break;
+    case 'Hard Light': r = tr<0.5?2*br*tr:1-2*(1-br)*(1-tr); g = tg<0.5?2*bg*tg:1-2*(1-bg)*(1-tg); b = tb<0.5?2*bb*tb:1-2*(1-bb)*(1-tb); break;
+    case 'Color Dodge': r = br===0?0:Math.min(1,br/(1-tr)); g = bg===0?0:Math.min(1,bg/(1-tg)); b = bb===0?0:Math.min(1,bb/(1-tb)); break;
+    case 'Color Burn': r = br===1?1:Math.max(0,1-(1-br)/tr); g = bg===1?1:Math.max(0,1-(1-bg)/tg); b = bb===1?1:Math.max(0,1-(1-bb)/tb); break;
+    case 'Difference': r = Math.abs(br-tr); g = Math.abs(bg-tg); b = Math.abs(bb-tb); break;
+    default: r = tr; g = tg; b = tb;
+  }
+  return {
+    r: Math.round((r * a + br * (1-a)) * 255),
+    g: Math.round((g * a + bg * (1-a)) * 255),
+    b: Math.round((b * a + bb * (1-a)) * 255),
+  };
+}
+
+// ============ MAIN APP COMPONENT ============
+function App() {
+  // Canvas state
+  const [canvasWidth, setCanvasWidth] = useState(1920);
+  const [canvasHeight, setCanvasHeight] = useState(1080);
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [rotation, setRotation] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+
+  // Tool state
+  const [currentTool, setCurrentTool] = useState('brush');
+  const [brushSize, setBrushSize] = useState(10);
+  const [brushOpacity, setBrushOpacity] = useState(100);
+  const [brushHardness, setBrushHardness] = useState(80);
+  const [brushFlow, setBrushFlow] = useState(100);
+  const [brushSpacing, setBrushSpacing] = useState(5);
+  const [brushType, setBrushType] = useState('round');
+  const [smoothing, setSmoothing] = useState(3);
+  const [symmetryMode, setSymmetryMode] = useState('none');
+  const [symmetrySegments, setSymmetrySegments] = useState(6);
+
+  // Color state
+  const [foregroundColor, setForegroundColor] = useState('#ffffff');
+  const [backgroundColor, setBackgroundColor] = useState('#000000');
+  const [hue, setHue] = useState(0);
+  const [sat, setSat] = useState(0);
+  const [val, setVal] = useState(100);
+  const [recentColors, setRecentColors] = useState(['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ffffff','#000000']);
+
+  // Layer state
+  const [layers, setLayers] = useState([
+    { id: 1, name: 'Background', visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: null },
+    { id: 2, name: 'Layer 1', visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: null },
+  ]);
+  const [activeLayerId, setActiveLayerId] = useState(2);
+  const [nextLayerId, setNextLayerId] = useState(3);
+
+  // History state
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [historyLabels, setHistoryLabels] = useState([]);
+
+  // Selection state
+  const [selection, setSelection] = useState(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState(null);
+
+  // UI state
+  const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const [fps, setFps] = useState(60);
+  const [rightPanel, setRightPanel] = useState('brush');
+  const [brushCategory, setBrushCategory] = useState('Basic');
+
+  // Refs
+  const mainCanvasRef = useRef(null);
+  const compositeCanvasRef = useRef(null);
+  const layerCanvasRefs = useRef({});
+  const isDrawing = useRef(false);
+  const lastPoint = useRef(null);
+  const points = useRef([]);
+  const strokeCanvas = useRef(null);
+  const frameCount = useRef(0);
+  const lastFpsTime = useRef(Date.now());
+  const panStart = useRef({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  // Initialize layers
+  useEffect(() => {
+    const initLayers = layers.map(layer => {
+      if (!layer.canvas) {
+        const c = document.createElement('canvas');
+        c.width = canvasWidth;
+        c.height = canvasHeight;
+        const ctx = c.getContext('2d');
+        if (layer.name === 'Background') {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        }
+        return { ...layer, canvas: c };
+      }
+      return layer;
+    });
+    setLayers(initLayers);
+    saveHistory('New Canvas', initLayers);
+  }, []);
+
+  // Composite all layers
+  const compositeAll = useCallback(() => {
+    const canvas = compositeCanvasRef.current;
+    if (!canvas) return;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    layers.forEach(layer => {
+      if (!layer.visible || !layer.canvas) return;
+      ctx.globalAlpha = layer.opacity / 100;
+      ctx.globalCompositeOperation = getCompositeOp(layer.blendMode);
+      ctx.drawImage(layer.canvas, 0, 0);
+    });
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    renderToMain();
+  }, [layers, zoom, panX, panY, rotation, canvasWidth, canvasHeight]);
+
+  function getCompositeOp(mode) {
+    const map = {
+      'Normal': 'source-over', 'Multiply': 'multiply', 'Screen': 'screen',
+      'Overlay': 'overlay', 'Soft Light': 'soft-light', 'Hard Light': 'hard-light',
+      'Color Dodge': 'color-dodge', 'Color Burn': 'color-burn', 'Difference': 'difference',
+      'Hue': 'hue', 'Saturation': 'saturation', 'Color': 'color', 'Luminosity': 'luminosity',
+    };
+    return map[mode] || 'source-over';
+  }
+
+  // Render composite to display canvas
+  const renderToMain = useCallback(() => {
+    const mainCanvas = mainCanvasRef.current;
+    const composite = compositeCanvasRef.current;
+    if (!mainCanvas || !composite) return;
+    const ctx = mainCanvas.getContext('2d');
+    const w = mainCanvas.width;
+    const h = mainCanvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(w/2 + panX, h/2 + panY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-canvasWidth/2, -canvasHeight/2);
+    // Draw checkerboard for transparency
+    const tileSize = 16;
+    for (let y = 0; y < canvasHeight; y += tileSize) {
+      for (let x = 0; x < canvasWidth; x += tileSize) {
+        ctx.fillStyle = ((x/tileSize + y/tileSize) % 2 === 0) ? '#cccccc' : '#ffffff';
+        ctx.fillRect(x, y, tileSize, tileSize);
+      }
+    }
+    ctx.drawImage(composite, 0, 0);
+    // Draw selection
+    if (selection) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1 / zoom;
+      ctx.setLineDash([4/zoom, 4/zoom]);
+      if (selection.type === 'rect') {
+        ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+      } else if (selection.type === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(selection.x + selection.w/2, selection.y + selection.h/2, Math.abs(selection.w/2), Math.abs(selection.h/2), 0, 0, Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+    // FPS counter
+    frameCount.current++;
+    const now = Date.now();
+    if (now - lastFpsTime.current >= 1000) {
+      setFps(frameCount.current);
+      frameCount.current = 0;
+      lastFpsTime.current = now;
+    }
+  }, [zoom, panX, panY, rotation, canvasWidth, canvasHeight, selection]);
+
+  useEffect(() => { compositeAll(); }, [layers, zoom, panX, panY, rotation]);
+
+  // History management
+  function saveHistory(label, layerState) {
+    const ls = layerState || layers;
+    const snapshot = ls.map(l => {
+      const c = document.createElement('canvas');
+      c.width = canvasWidth;
+      c.height = canvasHeight;
+      if (l.canvas) c.getContext('2d').drawImage(l.canvas, 0, 0);
+      return { ...l, canvas: c };
+    });
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(snapshot);
+    const newLabels = historyLabels.slice(0, historyIndex + 1);
+    newLabels.push(label);
+    if (newHistory.length > 100) { newHistory.shift(); newLabels.shift(); }
+    setHistory(newHistory);
+    setHistoryLabels(newLabels);
+    setHistoryIndex(newHistory.length - 1);
+  }
+
+  function undo() {
+    if (historyIndex <= 0) return;
+    const newIndex = historyIndex - 1;
+    setHistoryIndex(newIndex);
+    restoreFromHistory(newIndex);
+  }
+
+  function redo() {
+    if (historyIndex >= history.length - 1) return;
+    const newIndex = historyIndex + 1;
+    setHistoryIndex(newIndex);
+    restoreFromHistory(newIndex);
+  }
+
+  function restoreFromHistory(index) {
+    const snapshot = history[index];
+    if (!snapshot) return;
+    const restored = snapshot.map(l => {
+      const c = document.createElement('canvas');
+      c.width = canvasWidth;
+      c.height = canvasHeight;
+      if (l.canvas) c.getContext('2d').drawImage(l.canvas, 0, 0);
+      return { ...l, canvas: c };
+    });
+    setLayers(restored);
+  }
+
+  // Convert screen coords to canvas coords
+  function screenToCanvas(clientX, clientY) {
+    const mainCanvas = mainCanvasRef.current;
+    if (!mainCanvas) return { x: 0, y: 0 };
+    const rect = mainCanvas.getBoundingClientRect();
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+    const cx = mainCanvas.width / 2 + panX;
+    const cy = mainCanvas.height / 2 + panY;
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const angle = -rotation * Math.PI / 180;
+    const rx = dx * Math.cos(angle) - dy * Math.sin(angle);
+    const ry = dx * Math.sin(angle) + dy * Math.cos(angle);
+    return {
+      x: rx / zoom + canvasWidth / 2,
+      y: ry / zoom + canvasHeight / 2,
+    };
+  }
+
+  // ============ BRUSH RENDERING ============
+  function drawBrushDab(ctx, x, y, pressure, color, isEraser) {
+    const size = brushSize * pressure;
+    const opacity = (brushOpacity / 100) * (brushFlow / 100) * pressure;
+    const hardness = brushHardness / 100;
+
+    ctx.save();
+    if (isEraser) {
+      ctx.globalCompositeOperation = 'destination-out';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.globalAlpha = opacity;
+
+    switch(brushType) {
+      case 'pencil': {
+        const noise = Math.random() * 0.3 + 0.7;
+        ctx.globalAlpha = opacity * noise * 0.7;
+        ctx.beginPath();
+        ctx.arc(x, y, size/2, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        break;
+      }
+      case 'ink': {
+        ctx.beginPath();
+        ctx.arc(x, y, size/2, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        break;
+      }
+      case 'airbrush': {
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(0.5, color.slice(0,7) + '44');
+        gradient.addColorStop(1, color.slice(0,7) + '00');
+        ctx.globalAlpha = opacity * 0.3;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x - size, y - size, size * 2, size * 2);
+        break;
+      }
+      case 'watercolor': {
+        const wcGrad = ctx.createRadialGradient(x, y, 0, x, y, size * (1 + Math.random() * 0.3));
+        wcGrad.addColorStop(0, color);
+        wcGrad.addColorStop(0.6, color.slice(0,7) + '66');
+        wcGrad.addColorStop(1, color.slice(0,7) + '00');
+        ctx.globalAlpha = opacity * 0.4;
+        ctx.fillStyle = wcGrad;
+        ctx.beginPath();
+        ctx.ellipse(x, y, size * (0.9 + Math.random()*0.2), size * (0.9 + Math.random()*0.2), Math.random() * Math.PI, 0, Math.PI*2);
+        ctx.fill();
+        break;
+      }
+      case 'marker': {
+        ctx.globalAlpha = opacity * 0.6;
+        ctx.beginPath();
+        ctx.arc(x, y, size/2, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        break;
+      }
+      case 'charcoal': {
+        ctx.globalAlpha = opacity * 0.5;
+        const cSize = size / 2;
+        for (let i = 0; i < 3; i++) {
+          const ox = (Math.random() - 0.5) * cSize * 0.5;
+          const oy = (Math.random() - 0.5) * cSize * 0.5;
+          ctx.beginPath();
+          ctx.ellipse(x + ox, y + oy, cSize * (0.5 + Math.random()*0.5), cSize * (0.3 + Math.random()*0.3), Math.random()*Math.PI, 0, Math.PI*2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        break;
+      }
+      default: { // round
+        if (hardness >= 0.95) {
+          ctx.beginPath();
+          ctx.arc(x, y, size/2, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        } else {
+          const gradient = ctx.createRadialGradient(x, y, size/2 * hardness, x, y, size/2);
+          gradient.addColorStop(0, color);
+          gradient.addColorStop(1, color.slice(0,7) + '00');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(x, y, size/2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawStrokeLine(ctx, from, to, pressure, color, isEraser) {
+    const d = dist(from.x, from.y, to.x, to.y);
+    const spacing = Math.max(1, brushSize * (brushSpacing / 100) * 0.5);
+    const steps = Math.max(1, Math.ceil(d / spacing));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = lerp(from.x, to.x, t);
+      const y = lerp(from.y, to.y, t);
+      const p = lerp(from.pressure || pressure, to.pressure || pressure, t);
+      drawBrushDab(ctx, x, y, p, color, isEraser);
+      // Symmetry
+      if (symmetryMode === 'vertical') {
+        drawBrushDab(ctx, canvasWidth - x, y, p, color, isEraser);
+      } else if (symmetryMode === 'horizontal') {
+        drawBrushDab(ctx, x, canvasHeight - y, p, color, isEraser);
+      } else if (symmetryMode === 'radial') {
+        for (let s = 1; s < symmetrySegments; s++) {
+          const angle = (s / symmetrySegments) * Math.PI * 2;
+          const cx = canvasWidth / 2;
+          const cy = canvasHeight / 2;
+          const dx = x - cx;
+          const dy = y - cy;
+          const rx = dx * Math.cos(angle) - dy * Math.sin(angle) + cx;
+          const ry = dx * Math.sin(angle) + dy * Math.cos(angle) + cy;
+          drawBrushDab(ctx, rx, ry, p, color, isEraser);
+        }
+      }
+    }
+  }
+
+  // ============ POINTER EVENT HANDLERS ============
+  function handlePointerDown(e) {
+    if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+      setIsPanning(true);
+      panStart.current = { x: e.clientX - panX, y: e.clientY - panY };
+      e.preventDefault();
+      return;
+    }
+    if (e.button === 2) return;
+    if (e.button !== 0) return;
+
+    const pos = screenToCanvas(e.clientX, e.clientY);
+    const pressure = e.pressure > 0 ? e.pressure : 0.5;
+
+    if (currentTool === 'eyedropper') {
+      pickColor(pos.x, pos.y);
+      return;
+    }
+    if (currentTool === 'bucket') {
+      floodFill(Math.round(pos.x), Math.round(pos.y));
+      return;
+    }
+    if (currentTool === 'rectSelect' || currentTool === 'ellipseSelect' || currentTool === 'lasso') {
+      setIsSelecting(true);
+      setSelectionStart(pos);
+      setSelection(null);
+      return;
+    }
+    if (currentTool === 'move') {
+      isDrawing.current = true;
+      lastPoint.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+    if (!activeLayer || activeLayer.locked || !activeLayer.visible) return;
+
+    isDrawing.current = true;
+    points.current = [{ ...pos, pressure }];
+    lastPoint.current = { ...pos, pressure };
+
+    // Create stroke canvas for this stroke
+    const sc = document.createElement('canvas');
+    sc.width = canvasWidth;
+    sc.height = canvasHeight;
+    strokeCanvas.current = sc;
+
+    const ctx = sc.getContext('2d');
+    const isEraser = currentTool === 'eraser';
+    const color = isEraser ? '#000000' : foregroundColor;
+    drawBrushDab(ctx, pos.x, pos.y, pressure, color, isEraser);
+
+    // Apply stroke to layer
+    applyStrokeToLayer();
+    e.target.setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e) {
+    const pos = screenToCanvas(e.clientX, e.clientY);
+    setCursorPos({ x: Math.round(pos.x), y: Math.round(pos.y) });
+
+    if (isPanning) {
+      setPanX(e.clientX - panStart.current.x);
+      setPanY(e.clientY - panStart.current.y);
+      return;
+    }
+
+    if (isSelecting && selectionStart) {
+      const type = currentTool === 'rectSelect' ? 'rect' : currentTool === 'ellipseSelect' ? 'ellipse' : 'rect';
+      setSelection({
+        type,
+        x: Math.min(selectionStart.x, pos.x),
+        y: Math.min(selectionStart.y, pos.y),
+        w: Math.abs(pos.x - selectionStart.x),
+        h: Math.abs(pos.y - selectionStart.y),
+      });
+      compositeAll();
+      return;
+    }
+
+    if (currentTool === 'move' && isDrawing.current && lastPoint.current) {
+      const dx = e.clientX - lastPoint.current.x;
+      const dy = e.clientY - lastPoint.current.y;
+      const activeLayer = layers.find(l => l.id === activeLayerId);
+      if (activeLayer && activeLayer.canvas) {
+        const ctx = activeLayer.canvas.getContext('2d');
+        const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        ctx.putImageData(imgData, dx/zoom, dy/zoom);
+        compositeAll();
+      }
+      lastPoint.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    if (!isDrawing.current || !strokeCanvas.current) return;
+    const pressure = e.pressure > 0 ? e.pressure : 0.5;
+    const current = { ...pos, pressure };
+    points.current.push(current);
+
+    const ctx = strokeCanvas.current.getContext('2d');
+    const isEraser = currentTool === 'eraser';
+    const color = isEraser ? '#000000' : foregroundColor;
+
+    // Use smoothing with catmull-rom
+    const pts = points.current;
+    if (pts.length >= 2) {
+      const from = pts[pts.length - 2];
+      const to = pts[pts.length - 1];
+      drawStrokeLine(ctx, from, to, pressure, color, isEraser);
+    }
+
+    lastPoint.current = current;
+    applyStrokeToLayer();
+  }
+
+  function handlePointerUp(e) {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+    if (isSelecting) {
+      setIsSelecting(false);
+      compositeAll();
+      return;
+    }
+    if (currentTool === 'move' && isDrawing.current) {
+      isDrawing.current = false;
+      saveHistory('Move Layer');
+      return;
+    }
+    if (!isDrawing.current) return;
+    isDrawing.current = false;
+    points.current = [];
+    strokeCanvas.current = null;
+    lastPoint.current = null;
+    saveHistory(currentTool === 'eraser' ? 'Erase' : 'Paint');
+    addRecentColor(foregroundColor);
+  }
+
+  function applyStrokeToLayer() {
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+    if (!activeLayer || !activeLayer.canvas || !strokeCanvas.current) return;
+    const ctx = activeLayer.canvas.getContext('2d');
+    const isEraser = currentTool === 'eraser';
+    if (isEraser) {
+      ctx.globalCompositeOperation = 'destination-out';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // We draw the new dabs directly, composite shows in real time
+    compositeAll();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function pickColor(x, y) {
+    const composite = compositeCanvasRef.current;
+    if (!composite) return;
+    const ctx = composite.getContext('2d');
+    const pixel = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+    const hex = rgbToHex(pixel[0], pixel[1], pixel[2]);
+    setForegroundColor(hex);
+    const hsv = rgbToHsv(pixel[0], pixel[1], pixel[2]);
+    setHue(hsv.h); setSat(hsv.s); setVal(hsv.v);
+    addRecentColor(hex);
+  }
+
+  function floodFill(startX, startY) {
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+    if (!activeLayer || !activeLayer.canvas || activeLayer.locked) return;
+    const ctx = activeLayer.canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    const data = imageData.data;
+    const targetColor = getPixelColor(data, startX, startY);
+    const fillColor = hexToRgb(foregroundColor);
+    if (targetColor.r === fillColor.r && targetColor.g === fillColor.g && targetColor.b === fillColor.b) return;
+    const stack = [[startX, startY]];
+    const visited = new Set();
+    const tolerance = 30;
+    while (stack.length > 0) {
+      const [x, y] = stack.pop();
+      if (x < 0 || x >= canvasWidth || y < 0 || y >= canvasHeight) continue;
+      const key = y * canvasWidth + x;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const c = getPixelColor(data, x, y);
+      if (Math.abs(c.r-targetColor.r) + Math.abs(c.g-targetColor.g) + Math.abs(c.b-targetColor.b) > tolerance) continue;
+      const idx = key * 4;
+      data[idx] = fillColor.r;
+      data[idx+1] = fillColor.g;
+      data[idx+2] = fillColor.b;
+      data[idx+3] = 255;
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+    ctx.putImageData(imageData, 0, 0);
+    compositeAll();
+    saveHistory('Fill');
+  }
+
+  function getPixelColor(data, x, y) {
+    const idx = (y * canvasWidth + x) * 4;
+    return { r: data[idx], g: data[idx+1], b: data[idx+2], a: data[idx+3] };
+  }
+
+  function addRecentColor(color) {
+    setRecentColors(prev => {
+      const filtered = prev.filter(c => c !== color);
+      return [color, ...filtered].slice(0, 16);
+    });
+  }
+
+  // ============ LAYER OPERATIONS ============
+  function addLayer() {
+    const c = document.createElement('canvas');
+    c.width = canvasWidth;
+    c.height = canvasHeight;
+    const newLayer = { id: nextLayerId, name: `Layer ${nextLayerId - 1}`, visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: c };
+    setLayers(prev => [...prev, newLayer]);
+    setActiveLayerId(nextLayerId);
+    setNextLayerId(prev => prev + 1);
+    saveHistory('New Layer');
+  }
+
+  function deleteLayer() {
+    if (layers.length <= 1) return;
+    const newLayers = layers.filter(l => l.id !== activeLayerId);
+    setLayers(newLayers);
+    setActiveLayerId(newLayers[newLayers.length - 1].id);
+    saveHistory('Delete Layer');
+  }
+
+  function duplicateLayer() {
+    const source = layers.find(l => l.id === activeLayerId);
+    if (!source) return;
+    const c = document.createElement('canvas');
+    c.width = canvasWidth;
+    c.height = canvasHeight;
+    if (source.canvas) c.getContext('2d').drawImage(source.canvas, 0, 0);
+    const newLayer = { ...source, id: nextLayerId, name: source.name + ' Copy', canvas: c };
+    const idx = layers.findIndex(l => l.id === activeLayerId);
+    const newLayers = [...layers];
+    newLayers.splice(idx + 1, 0, newLayer);
+    setLayers(newLayers);
+    setActiveLayerId(nextLayerId);
+    setNextLayerId(prev => prev + 1);
+    saveHistory('Duplicate Layer');
+  }
+
+  function mergeDown() {
+    const idx = layers.findIndex(l => l.id === activeLayerId);
+    if (idx <= 0) return;
+    const upper = layers[idx];
+    const lower = layers[idx - 1];
+    if (!upper.canvas || !lower.canvas) return;
+    const ctx = lower.canvas.getContext('2d');
+    ctx.globalAlpha = upper.opacity / 100;
+    ctx.globalCompositeOperation = getCompositeOp(upper.blendMode);
+    ctx.drawImage(upper.canvas, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    const newLayers = layers.filter(l => l.id !== activeLayerId);
+    setLayers(newLayers);
+    setActiveLayerId(lower.id);
+    saveHistory('Merge Down');
+  }
+
+  function flattenImage() {
+    const c = document.createElement('canvas');
+    c.width = canvasWidth;
+    c.height = canvasHeight;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    layers.forEach(layer => {
+      if (!layer.visible || !layer.canvas) return;
+      ctx.globalAlpha = layer.opacity / 100;
+      ctx.globalCompositeOperation = getCompositeOp(layer.blendMode);
+      ctx.drawImage(layer.canvas, 0, 0);
+    });
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    setLayers([{ id: 1, name: 'Background', visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: c }]);
+    setActiveLayerId(1);
+    setNextLayerId(2);
+    saveHistory('Flatten');
+  }
+
+  function moveLayer(fromIdx, direction) {
+    const toIdx = fromIdx + direction;
+    if (toIdx < 0 || toIdx >= layers.length) return;
+    const newLayers = [...layers];
+    [newLayers[fromIdx], newLayers[toIdx]] = [newLayers[toIdx], newLayers[fromIdx]];
+    setLayers(newLayers);
+  }
+
+  // ============ FILE OPERATIONS ============
+  function exportPNG() {
+    const composite = compositeCanvasRef.current;
+    if (!composite) return;
+    const link = document.createElement('a');
+    link.download = 'painting.png';
+    link.href = composite.toDataURL('image/png');
+    link.click();
+  }
+
+  function exportJPG() {
+    const c = document.createElement('canvas');
+    c.width = canvasWidth;
+    c.height = canvasHeight;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    const composite = compositeCanvasRef.current;
+    if (composite) ctx.drawImage(composite, 0, 0);
+    const link = document.createElement('a');
+    link.download = 'painting.jpg';
+    link.href = c.toDataURL('image/jpeg', 0.92);
+    link.click();
+  }
+
+  function importImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = canvasWidth;
+          c.height = canvasHeight;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, canvasWidth, canvasHeight);
+          const newLayer = { id: nextLayerId, name: file.name, visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: c };
+          setLayers(prev => [...prev, newLayer]);
+          setActiveLayerId(nextLayerId);
+          setNextLayerId(prev => prev + 1);
+          saveHistory('Import Image');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  function newCanvas(w, h) {
+    setCanvasWidth(w);
+    setCanvasHeight(h);
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = w;
+    bgCanvas.height = h;
+    const bgCtx = bgCanvas.getContext('2d');
+    bgCtx.fillStyle = '#ffffff';
+    bgCtx.fillRect(0, 0, w, h);
+    const layerCanvas = document.createElement('canvas');
+    layerCanvas.width = w;
+    layerCanvas.height = h;
+    const newLayers = [
+      { id: 1, name: 'Background', visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: bgCanvas },
+      { id: 2, name: 'Layer 1', visible: true, locked: false, opacity: 100, blendMode: 'Normal', canvas: layerCanvas },
+    ];
+    setLayers(newLayers);
+    setActiveLayerId(2);
+    setNextLayerId(3);
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setHistoryLabels([]);
+    saveHistory('New Canvas', newLayers);
+    setShowNewDialog(false);
+  }
+
+  // ============ KEYBOARD SHORTCUTS ============
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (showCommandPalette || showNewDialog) {
+        if (e.key === 'Escape') { setShowCommandPalette(false); setShowNewDialog(false); }
+        return;
+      }
+      if (e.key === ' ') { setSpaceHeld(true); e.preventDefault(); }
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
+      if (e.ctrlKey && e.shiftKey && e.key === 'Z') { redo(); e.preventDefault(); }
+      if (e.ctrlKey && e.shiftKey && e.key === 'P') { setShowCommandPalette(true); e.preventDefault(); }
+      if (e.ctrlKey && e.key === 'n') { setShowNewDialog(true); e.preventDefault(); }
+      if (e.ctrlKey && e.key === 's') { exportPNG(); e.preventDefault(); }
+      if (e.ctrlKey && e.key === 'd') { setSelection(null); compositeAll(); e.preventDefault(); }
+      if (!e.ctrlKey && !e.altKey) {
+        switch(e.key.toLowerCase()) {
+          case 'b': setCurrentTool('brush'); break;
+          case 'n': setCurrentTool('pencil'); break;
+          case 'e': setCurrentTool('eraser'); break;
+          case 'v': setCurrentTool('move'); break;
+          case 'g': setCurrentTool('bucket'); break;
+          case 'i': setCurrentTool('eyedropper'); break;
+          case 'm': setCurrentTool('rectSelect'); break;
+          case 'l': setCurrentTool('lasso'); break;
+          case 'r': setCurrentTool('smudge'); break;
+          case 'x': { const tmp = foregroundColor; setForegroundColor(backgroundColor); setBackgroundColor(tmp); break; }
+          case 'd': { setForegroundColor('#000000'); setBackgroundColor('#ffffff'); setHue(0); setSat(0); setVal(0); break; }
+          case '[': setBrushSize(prev => Math.max(1, prev - 5)); break;
+          case ']': setBrushSize(prev => Math.min(500, prev + 5)); break;
+          case '+': case '=': setZoom(prev => Math.min(32, prev * 1.2)); break;
+          case '-': setZoom(prev => Math.max(0.1, prev / 1.2)); break;
+          case '0': setZoom(1); setPanX(0); setPanY(0); setRotation(0); break;
+        }
+      }
+    }
+    function handleKeyUp(e) {
+      if (e.key === ' ') setSpaceHeld(false);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
+  }, [showCommandPalette, showNewDialog, foregroundColor, backgroundColor, historyIndex, history]);
+
+  // Wheel zoom
+  function handleWheel(e) {
+    e.preventDefault();
+    if (e.ctrlKey) {
+      setRotation(prev => prev + (e.deltaY > 0 ? 5 : -5));
+    } else {
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(prev => clamp(prev * factor, 0.05, 32));
+    }
+  }
+
+  // Resize main canvas on window resize
+  useEffect(() => {
+    function resize() {
+      const canvas = mainCanvasRef.current;
+      const container = containerRef.current;
+      if (canvas && container) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        compositeAll();
+      }
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [compositeAll]);
+
+  // Context menu
+  function handleContextMenu(e) {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  // Apply brush preset
+  function applyPreset(preset) {
+    setBrushSize(preset.size);
+    setBrushOpacity(preset.opacity);
+    setBrushHardness(preset.hardness);
+    setBrushFlow(preset.flow);
+    setBrushSpacing(preset.spacing);
+    setBrushType(preset.type);
+  }
+
+  // Color from HSV
+  useEffect(() => {
+    const rgb = hsvToRgb(hue, sat, val);
+    setForegroundColor(rgbToHex(rgb.r, rgb.g, rgb.b));
+  }, [hue, sat, val]);
+
+  function setColorFromHex(hex) {
+    setForegroundColor(hex);
+    const rgb = hexToRgb(hex);
+    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+    setHue(hsv.h);
+    setSat(hsv.s);
+    setVal(hsv.v);
+  }
+
+  // ============ MENU DATA ============
+  const menus = {
+    File: [
+      { label: 'New...', shortcut: 'Ctrl+N', action: () => setShowNewDialog(true) },
+      { label: 'Import Image...', action: importImage },
+      { separator: true },
+      { label: 'Export as PNG', shortcut: 'Ctrl+S', action: exportPNG },
+      { label: 'Export as JPG', action: exportJPG },
+    ],
+    Edit: [
+      { label: 'Undo', shortcut: 'Ctrl+Z', action: undo },
+      { label: 'Redo', shortcut: 'Ctrl+Shift+Z', action: redo },
+      { separator: true },
+      { label: 'Deselect', shortcut: 'Ctrl+D', action: () => { setSelection(null); compositeAll(); } },
+      { label: 'Select All', shortcut: 'Ctrl+A', action: () => setSelection({ type: 'rect', x: 0, y: 0, w: canvasWidth, h: canvasHeight }) },
+    ],
+    View: [
+      { label: 'Zoom In', shortcut: '+', action: () => setZoom(prev => Math.min(32, prev * 1.5)) },
+      { label: 'Zoom Out', shortcut: '-', action: () => setZoom(prev => Math.max(0.05, prev / 1.5)) },
+      { label: 'Fit to Window', shortcut: '0', action: () => { setZoom(1); setPanX(0); setPanY(0); setRotation(0); } },
+      { separator: true },
+      { label: 'Reset Rotation', action: () => setRotation(0) },
+      { label: 'Rotate CW 15', action: () => setRotation(prev => prev + 15) },
+      { label: 'Rotate CCW 15', action: () => setRotation(prev => prev - 15) },
+    ],
+    Image: [
+      { label: 'Flatten Image', action: flattenImage },
+      { label: 'Canvas Size: ' + canvasWidth + 'x' + canvasHeight, action: () => {} },
+    ],
+    Layer: [
+      { label: 'New Layer', action: addLayer },
+      { label: 'Duplicate Layer', action: duplicateLayer },
+      { label: 'Delete Layer', action: deleteLayer },
+      { separator: true },
+      { label: 'Merge Down', action: mergeDown },
+      { label: 'Flatten Image', action: flattenImage },
+    ],
+    Select: [
+      { label: 'Select All', shortcut: 'Ctrl+A', action: () => setSelection({ type: 'rect', x: 0, y: 0, w: canvasWidth, h: canvasHeight }) },
+      { label: 'Deselect', shortcut: 'Ctrl+D', action: () => { setSelection(null); compositeAll(); } },
+      { label: 'Invert Selection', action: () => {} },
+    ],
+    Filter: [
+      { label: 'Blur (Gaussian)', action: () => applyFilter('blur') },
+      { label: 'Sharpen', action: () => applyFilter('sharpen') },
+      { label: 'Grayscale', action: () => applyFilter('grayscale') },
+      { label: 'Invert Colors', action: () => applyFilter('invert') },
+      { label: 'Brightness +10%', action: () => applyFilter('brighten') },
+      { label: 'Contrast +10%', action: () => applyFilter('contrast') },
+    ],
+    Window: [
+      { label: 'Brush Settings', action: () => setRightPanel('brush') },
+      { label: 'Color Picker', action: () => setRightPanel('color') },
+      { label: 'Layers', action: () => setRightPanel('layers') },
+      { label: 'History', action: () => setRightPanel('history') },
+      { label: 'Navigator', action: () => setRightPanel('navigator') },
+    ],
+    Help: [
+      { label: 'Keyboard Shortcuts', action: () => setShowCommandPalette(true) },
+      { label: 'About Infinite Painter Studio', action: () => alert('Infinite Painter Studio v1.0\nA professional digital painting application.') },
+    ],
+  };
+
+  function applyFilter(type) {
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+    if (!activeLayer || !activeLayer.canvas || activeLayer.locked) return;
+    const ctx = activeLayer.canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    const data = imageData.data;
+    switch(type) {
+      case 'grayscale':
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+          data[i] = data[i+1] = data[i+2] = avg;
+        }
+        break;
+      case 'invert':
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = 255 - data[i];
+          data[i+1] = 255 - data[i+1];
+          data[i+2] = 255 - data[i+2];
+        }
+        break;
+      case 'brighten':
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = Math.min(255, data[i] * 1.1);
+          data[i+1] = Math.min(255, data[i+1] * 1.1);
+          data[i+2] = Math.min(255, data[i+2] * 1.1);
+        }
+        break;
+      case 'contrast':
+        const factor = 1.2;
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = clamp((data[i] - 128) * factor + 128, 0, 255);
+          data[i+1] = clamp((data[i+1] - 128) * factor + 128, 0, 255);
+          data[i+2] = clamp((data[i+2] - 128) * factor + 128, 0, 255);
+        }
+        break;
+      case 'blur':
+        ctx.filter = 'blur(3px)';
+        ctx.drawImage(activeLayer.canvas, 0, 0);
+        ctx.filter = 'none';
+        compositeAll();
+        saveHistory('Blur');
+        return;
+      case 'sharpen':
+        // Simple sharpen by unsharp mask approximation
+        break;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    compositeAll();
+    saveHistory(type.charAt(0).toUpperCase() + type.slice(1));
+  }
+
+  // ============ RENDER ============
+  return (
+    <div className="flex flex-col h-screen w-screen text-gray-300 text-xs select-none" onClick={() => { setActiveMenu(null); setContextMenu(null); }}>
+      {/* Menu Bar */}
+      <div className="flex items-center h-7 bg-[#1a1a35] border-b border-[#333366] px-2 shrink-0">
+        <span className="text-sm font-bold text-[#8899ff] mr-4">Infinite Painter Studio</span>
+        {Object.keys(menus).map(menu => (
+          <div key={menu} className="relative" onClick={e => e.stopPropagation()}>
+            <div className={`menu-bar-item ${activeMenu === menu ? 'bg-[#3a3a5a] text-white' : ''}`}
+                 onClick={() => setActiveMenu(activeMenu === menu ? null : menu)}
+                 onMouseEnter={() => activeMenu && setActiveMenu(menu)}>
+              {menu}
+            </div>
+            {activeMenu === menu && (
+              <div className="dropdown-menu">
+                {menus[menu].map((item, i) => item.separator ?
+                  <div key={i} className="dropdown-separator" /> :
+                  <div key={i} className="dropdown-item" onClick={() => { item.action(); setActiveMenu(null); }}>
+                    <span>{item.label}</span>
+                    {item.shortcut && <span className="text-gray-500 ml-4 text-[10px]">{item.shortcut}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-gray-500">
+          <span>Symmetry:</span>
+          <select value={symmetryMode} onChange={e => setSymmetryMode(e.target.value)}>
+            <option value="none">None</option>
+            <option value="vertical">Vertical</option>
+            <option value="horizontal">Horizontal</option>
+            <option value="radial">Radial</option>
+          </select>
+          {symmetryMode === 'radial' && (
+            <input type="number" value={symmetrySegments} onChange={e => setSymmetrySegments(Number(e.target.value))}
+                   className="w-10 bg-[#2a2a4a] border border-[#444466] rounded text-center text-gray-300" min="2" max="32" />
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Toolbar */}
+        <div className="w-10 bg-[#1e1e3a] border-r border-[#333366] flex flex-col items-center py-1 gap-0.5 shrink-0 overflow-y-auto">
+          {TOOLS.map(tool => (
+            <button key={tool.id} className={`btn w-8 h-8 p-1 ${currentTool === tool.id ? 'active' : ''}`}
+                    onClick={() => setCurrentTool(tool.id)} title={`${tool.name} (${tool.shortcut})`}>
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d={tool.icon} />
+              </svg>
+            </button>
+          ))}
+          <div className="mt-2 border-t border-[#333366] pt-2 flex flex-col items-center gap-1">
+            <div className="relative w-7 h-7">
+              <div className="absolute top-0 left-0 w-5 h-5 rounded border-2 border-gray-600 cursor-pointer"
+                   style={{ backgroundColor: foregroundColor }}
+                   onClick={() => setRightPanel('color')} />
+              <div className="absolute bottom-0 right-0 w-5 h-5 rounded border-2 border-gray-600 cursor-pointer"
+                   style={{ backgroundColor: backgroundColor }}
+                   onClick={() => { const t = foregroundColor; setForegroundColor(backgroundColor); setBackgroundColor(t); }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Main Canvas Area */}
+        <div className="flex-1 relative overflow-hidden bg-[#111128]" ref={containerRef}
+             onContextMenu={handleContextMenu}>
+          <canvas ref={mainCanvasRef}
+                  className="absolute inset-0 w-full h-full"
+                  style={{ cursor: spaceHeld || isPanning ? 'grab' : currentTool === 'eyedropper' ? 'crosshair' : currentTool === 'move' ? 'move' : 'crosshair' }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerLeave={handlePointerUp}
+                  onWheel={handleWheel} />
+          <canvas ref={compositeCanvasRef} className="hidden" />
+          {/* Brush cursor preview */}
+          <div className="absolute pointer-events-none rounded-full border border-white/50"
+               style={{
+                 width: brushSize * zoom,
+                 height: brushSize * zoom,
+                 left: cursorPos.x !== undefined ? `calc(50% + ${panX}px - ${brushSize*zoom/2}px)` : -100,
+                 top: cursorPos.y !== undefined ? `calc(50% + ${panY}px - ${brushSize*zoom/2}px)` : -100,
+                 display: 'none',
+               }} />
+        </div>
+
+        {/* Right Panels */}
+        <div className="w-64 bg-[#1e1e3a] border-l border-[#333366] flex flex-col shrink-0 overflow-hidden">
+          {/* Panel Tabs */}
+          <div className="flex border-b border-[#333366] shrink-0">
+            {['brush','color','layers','history','navigator'].map(tab => (
+              <button key={tab} className={`flex-1 py-1.5 text-[10px] capitalize ${rightPanel === tab ? 'bg-[#2a2a4a] text-white border-b-2 border-[#6677ff]' : 'text-gray-500 hover:text-gray-300'}`}
+                      onClick={() => setRightPanel(tab)}>
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2">
+            {/* Brush Settings Panel */}
+            {rightPanel === 'brush' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Size: {brushSize}px</label>
+                  <input type="range" min="1" max="500" value={brushSize} onChange={e => setBrushSize(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Opacity: {brushOpacity}%</label>
+                  <input type="range" min="1" max="100" value={brushOpacity} onChange={e => setBrushOpacity(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Flow: {brushFlow}%</label>
+                  <input type="range" min="1" max="100" value={brushFlow} onChange={e => setBrushFlow(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Hardness: {brushHardness}%</label>
+                  <input type="range" min="0" max="100" value={brushHardness} onChange={e => setBrushHardness(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Spacing: {brushSpacing}%</label>
+                  <input type="range" min="1" max="50" value={brushSpacing} onChange={e => setBrushSpacing(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Smoothing: {smoothing}</label>
+                  <input type="range" min="0" max="10" value={smoothing} onChange={e => setSmoothing(Number(e.target.value))} />
+                </div>
+                <div className="border-t border-[#333366] pt-2">
+                  <label className="text-[10px] text-gray-400 block mb-1">Brush Presets</label>
+                  <select className="w-full mb-2" value={brushCategory} onChange={e => setBrushCategory(e.target.value)}>
+                    {Object.keys(BRUSH_CATEGORIES).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <div className="grid grid-cols-3 gap-1 max-h-40 overflow-y-auto">
+                    {(BRUSH_CATEGORIES[brushCategory] || []).map((preset, i) => (
+                      <button key={i} className="btn text-[9px] px-1 py-1 truncate" onClick={() => applyPreset(preset)} title={preset.name}>
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Color Picker Panel */}
+            {rightPanel === 'color' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Hue: {hue}</label>
+                  <input type="range" min="0" max="360" value={hue} onChange={e => setHue(Number(e.target.value))}
+                         style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }} />
+                </div>
+                <div className="relative w-full h-40 rounded overflow-hidden cursor-crosshair"
+                     style={{ background: `linear-gradient(to bottom, transparent, #000), linear-gradient(to right, #fff, hsl(${hue},100%,50%))` }}
+                     onClick={e => {
+                       const rect = e.currentTarget.getBoundingClientRect();
+                       const s = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                       const v = Math.round((1 - (e.clientY - rect.top) / rect.height) * 100);
+                       setSat(clamp(s, 0, 100));
+                       setVal(clamp(v, 0, 100));
+                     }}>
+                  <div className="absolute w-3 h-3 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                       style={{ left: `${sat}%`, top: `${100-val}%` }} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Saturation: {sat}%</label>
+                  <input type="range" min="0" max="100" value={sat} onChange={e => setSat(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Value: {val}%</label>
+                  <input type="range" min="0" max="100" value={val} onChange={e => setVal(Number(e.target.value))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded border border-[#444466]" style={{ backgroundColor: foregroundColor }} />
+                  <input type="text" value={foregroundColor} onChange={e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) setColorFromHex(e.target.value); }}
+                         className="flex-1 bg-[#2a2a4a] border border-[#444466] rounded px-2 py-1 text-gray-300 text-xs font-mono" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">RGB</label>
+                  <div className="flex gap-1">
+                    {(() => { const rgb = hexToRgb(foregroundColor); return ['r','g','b'].map(ch => (
+                      <div key={ch} className="flex-1">
+                        <span className="text-[9px] text-gray-500 uppercase">{ch}</span>
+                        <input type="number" min="0" max="255" value={rgb[ch]}
+                               className="w-full bg-[#2a2a4a] border border-[#444466] rounded px-1 py-0.5 text-[10px] text-gray-300"
+                               onChange={e => {
+                                 const c = hexToRgb(foregroundColor);
+                                 c[ch] = clamp(Number(e.target.value), 0, 255);
+                                 setColorFromHex(rgbToHex(c.r, c.g, c.b));
+                               }} />
+                      </div>
+                    )); })()}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 block mb-1">Recent Colors</label>
+                  <div className="grid grid-cols-8 gap-1">
+                    {recentColors.map((c, i) => (
+                      <div key={i} className="w-5 h-5 rounded cursor-pointer border border-[#444466] hover:border-white"
+                           style={{ backgroundColor: c }} onClick={() => setColorFromHex(c)} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Layers Panel */}
+            {rightPanel === 'layers' && (
+              <div className="space-y-2">
+                <div className="flex gap-1 mb-2">
+                  <button className="btn px-2 py-1 text-[10px]" onClick={addLayer}>+New</button>
+                  <button className="btn px-2 py-1 text-[10px]" onClick={duplicateLayer}>Dup</button>
+                  <button className="btn px-2 py-1 text-[10px]" onClick={deleteLayer}>Del</button>
+                  <button className="btn px-2 py-1 text-[10px]" onClick={mergeDown}>Merge</button>
+                  <button className="btn px-2 py-1 text-[10px]" onClick={flattenImage}>Flat</button>
+                </div>
+                <div className="space-y-0.5">
+                  {[...layers].reverse().map((layer, ri) => {
+                    const idx = layers.length - 1 - ri;
+                    return (
+                      <div key={layer.id}
+                           className={`layer-item flex items-center gap-1 px-1 py-1.5 rounded ${layer.id === activeLayerId ? 'active' : ''}`}
+                           onClick={() => setActiveLayerId(layer.id)}>
+                        <button className="text-[10px] w-4 h-4 flex items-center justify-center hover:text-white"
+                                onClick={e => { e.stopPropagation(); setLayers(prev => prev.map(l => l.id === layer.id ? {...l, visible: !l.visible} : l)); }}>
+                          {layer.visible ? '👁' : '○'}
+                        </button>
+                        <button className="text-[10px] w-4 h-4 flex items-center justify-center hover:text-white"
+                                onClick={e => { e.stopPropagation(); setLayers(prev => prev.map(l => l.id === layer.id ? {...l, locked: !l.locked} : l)); }}>
+                          {layer.locked ? '🔒' : '○'}
+                        </button>
+                        <span className="flex-1 text-[10px] truncate">{layer.name}</span>
+                        <div className="flex gap-0.5">
+                          <button className="text-[10px] hover:text-white" onClick={e => { e.stopPropagation(); moveLayer(idx, 1); }}>↑</button>
+                          <button className="text-[10px] hover:text-white" onClick={e => { e.stopPropagation(); moveLayer(idx, -1); }}>↓</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const al = layers.find(l => l.id === activeLayerId);
+                  if (!al) return null;
+                  return (
+                    <div className="border-t border-[#333366] pt-2 space-y-2">
+                      <div>
+                        <label className="text-[10px] text-gray-400">Opacity: {al.opacity}%</label>
+                        <input type="range" min="0" max="100" value={al.opacity}
+                               onChange={e => setLayers(prev => prev.map(l => l.id === activeLayerId ? {...l, opacity: Number(e.target.value)} : l))} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400">Blend Mode</label>
+                        <select className="w-full mt-1" value={al.blendMode}
+                                onChange={e => setLayers(prev => prev.map(l => l.id === activeLayerId ? {...l, blendMode: e.target.value} : l))}>
+                          {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* History Panel */}
+            {rightPanel === 'history' && (
+              <div className="space-y-0.5 max-h-96 overflow-y-auto">
+                {historyLabels.map((label, i) => (
+                  <div key={i} className={`px-2 py-1 rounded cursor-pointer text-[10px] ${i === historyIndex ? 'bg-[#4455cc] text-white' : 'hover:bg-[#2a2a4a]'}`}
+                       onClick={() => { setHistoryIndex(i); restoreFromHistory(i); }}>
+                    {i + 1}. {label}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Navigator Panel */}
+            {rightPanel === 'navigator' && (
+              <div className="space-y-2">
+                <div className="bg-[#111128] rounded p-2 aspect-video flex items-center justify-center text-gray-500 text-[10px]">
+                  <canvas className="w-full h-full" ref={el => {
+                    if (el && compositeCanvasRef.current) {
+                      const ctx = el.getContext('2d');
+                      el.width = el.clientWidth;
+                      el.height = el.clientHeight;
+                      ctx.clearRect(0, 0, el.width, el.height);
+                      ctx.drawImage(compositeCanvasRef.current, 0, 0, el.width, el.height);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400">Zoom: {Math.round(zoom * 100)}%</label>
+                  <input type="range" min="5" max="3200" value={Math.round(zoom * 100)}
+                         onChange={e => setZoom(Number(e.target.value) / 100)} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400">Rotation: {Math.round(rotation)}</label>
+                  <input type="range" min="-180" max="180" value={rotation}
+                         onChange={e => setRotation(Number(e.target.value))} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      <div className="h-6 bg-[#1a1a35] border-t border-[#333366] flex items-center px-3 text-[10px] text-gray-500 gap-4 shrink-0">
+        <span>Tool: {TOOLS.find(t => t.id === currentTool)?.name || currentTool}</span>
+        <span>Size: {brushSize}px</span>
+        <span>Zoom: {Math.round(zoom * 100)}%</span>
+        <span>Canvas: {canvasWidth}x{canvasHeight}</span>
+        <span>Pos: {cursorPos.x}, {cursorPos.y}</span>
+        <span>Layers: {layers.length}</span>
+        <span className="ml-auto">FPS: {fps}</span>
+      </div>
+
+      {/* New Canvas Dialog */}
+      {showNewDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowNewDialog(false)}>
+          <div className="panel p-6 w-80" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-white mb-4">New Canvas</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {[[1920,1080,'HD'],[2560,1440,'QHD'],[3840,2160,'4K'],[4096,4096,'Square 4K'],[1080,1080,'Square'],[1080,1920,'Portrait']].map(([w,h,label]) => (
+                  <button key={label} className="btn px-3 py-2 text-[10px]" onClick={() => newCanvas(w,h)}>{label} ({w}x{h})</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <div className="fixed inset-0 bg-black/60 flex items-start justify-center pt-20 z-50" onClick={() => setShowCommandPalette(false)}>
+          <div className="panel p-4 w-96 max-h-96 overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-white mb-3">Keyboard Shortcuts</h3>
+            <div className="space-y-1 text-[11px]">
+              {[
+                ['B','Brush'],['N','Pencil'],['E','Eraser'],['V','Move'],['G','Bucket Fill'],['I','Eyedropper'],
+                ['M','Rectangle Select'],['L','Lasso'],['R','Smudge/Blur'],['X','Swap Colors'],['D','Default Colors'],
+                ['[ / ]','Decrease/Increase Brush Size'],['+ / -','Zoom In/Out'],['0','Reset View'],
+                ['Space+Drag','Pan Canvas'],['Ctrl+Scroll','Rotate Canvas'],['Scroll','Zoom'],
+                ['Ctrl+Z','Undo'],['Ctrl+Shift+Z','Redo'],['Ctrl+N','New Canvas'],['Ctrl+S','Export PNG'],
+                ['Ctrl+D','Deselect'],['Ctrl+Shift+P','Command Palette'],
+              ].map(([key,desc]) => (
+                <div key={key} className="flex justify-between py-0.5">
+                  <span className="text-gray-300">{desc}</span>
+                  <span className="text-[#6677ff] font-mono">{key}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div className="context-menu py-1 text-xs" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={() => setContextMenu(null)}>
+          <div className="dropdown-item" onClick={undo}>Undo</div>
+          <div className="dropdown-item" onClick={redo}>Redo</div>
+          <div className="dropdown-separator" />
+          <div className="dropdown-item" onClick={() => setSelection(null)}>Deselect</div>
+          <div className="dropdown-item" onClick={addLayer}>New Layer</div>
+          <div className="dropdown-item" onClick={flattenImage}>Flatten</div>
+          <div className="dropdown-separator" />
+          <div className="dropdown-item" onClick={exportPNG}>Export PNG</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
